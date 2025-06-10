@@ -308,8 +308,8 @@ server <- function(input, output, session) {
             vacation_days = vacation_days,
             department = profile$Department[1]
           ) %>%
-          select(.data$employee_id, .data$employee_name, .data$project_name, .data$start_date, 
-                 .data$end_date, .data$hours_worked, .data$sick_days, .data$vacation_days, .data$department)
+          select("employee_id", "employee_name", "project_name", "start_date", 
+                 "end_date", "hours_worked", "sick_days", "vacation_days", "department")
       } else {
         summary_data <- data.frame(
           employee_id = profile$EmployeeID[1],
@@ -340,7 +340,7 @@ server <- function(input, output, session) {
     values$activity_data %>%
       filter(.data$Date >= date_range[1], .data$Date <= date_range[2]) %>%
       left_join(employee_profiles, by = "EmployeeID") %>%
-      select(.data$RecordID, .data$EmployeeName, .data$Date, .data$Activity, .data$Project, .data$Hours, .data$Notes) %>%
+      select("RecordID", "EmployeeName", "Date", "Activity", "Project", "Hours", "Notes") %>%
       arrange(desc(.data$Date))
   })
   
