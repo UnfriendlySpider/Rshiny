@@ -1,60 +1,395 @@
-// Section 1: Configuration & Database Setup //BEGIN// --- Configuration Store (Replaces hardcoded lists) ---DEFINE ConfigurationStoreFUNCTION GetEmployees() RETURNS LIST OF STRINGSFUNCTION GetProjects() RETURNS LIST OF STRINGSFUNCTION GetEmployeeProfile(employee_name) RETURNS EmployeeProfileEND ConfigurationStore// --- Data Structures (Updated for new CSV format) ---DEFINE STRUCTURE EmployeeProfileEmployeeID: STRING // e.g., "EMP1001"EmployeeName: STRINGDepartment: STRINGYearlyVacationAllowance: NUMBER // in daysYearlySickDayAllowance: NUMBER // in daysEND STRUCTURE// The ActivityRecord remains a daily log, as this is the most effective way to capture data.DEFINE STRUCTURE ActivityRecordRecordID: UNIQUE_IDEmployeeID: STRING // Link to EmployeeProfileDate: DATEActivity: STRING // "Project Work", "Sick Leave", or "Vacation"Project: STRING (empty if not "Project Work")Hours: NUMBER (relevant for "Project Work")Notes: STRING (can be empty)END STRUCTURE// --- Database Abstraction Layer ---DEFINE DatabaseFUNCTION Connect()FUNCTION FetchAllRecords() RETURNS LIST OF ActivityRecordFUNCTION WriteRecord(record) RETURNS BOOLEAN (success/fail)FUNCTION UpdateRecord(record) RETURNS BOOLEAN (success/fail)FUNCTION DeleteRecord(record_id) RETURNS BOOLEAN (success/fail)END Database// --- Initial Application State ---db_connection = Database.Connect()main_data_store = Database.FetchAllRecords()END// Section 2: User Interface (UI) Definition //BEGIN UI// The UI remains largely the same, as the core function is still daily data entry.// The main change is the enhanced functionality of the "Generate Report" button.CREATE MainWindow with title "Employee Activity Tracker"CREATE SidebarLayout// --- Sidebar Panel for Inputs ---
-**BEGIN SidebarPanel**
-  DISPLAY header "Log New Activity"
-  CREATE dropdown `employee_selector` populated by `ConfigurationStore.GetEmployees()`
-  // Other UI elements (date_selector, activity_selector, etc.) remain the same.
-  // ...
-**END SidebarPanel**
+# Employee Activity Tracker - Implemented Application Structure
 
-// --- Main Panel for Displaying Information ---
-**BEGIN MainPanel**
-  CREATE `TabControl`
+## Section 1: Configuration & Data Setup
 
-    // --- Tab 1: Data Log (Shows raw daily entries) ---
-    CREATE `DataLogTab` with title "Data Log"
-      DISPLAY header "All Submitted Daily Entries"
-      CREATE interactive table `activity_table`
-        // Columns: Employee Name, Date, Activity, Project, Hours, Notes, Actions
-    END `DataLogTab`
+### Required Libraries:
+- shiny (core framework)
+- shinyjs (UI enhancements)
+- DT (data tables)
+- dplyr (data manipulation with .data$ notation for proper variable binding)
+- plotly (interactive charts)
+- readr (CSV operations)  
+- lubridate (date processing)
 
-    // --- Tab 2: Dashboard ---
-    CREATE `DashboardTab` with title "Dashboard"
-      DISPLAY header for "Analytics Dashboard"
-      CREATE `date_range_selector` (start date, end date)
-      // The export button is now the key to generating the requested CSV format.
-      CREATE button `export_summary_button` with text "Generate Summary Report (CSV)"
-      // KPIs and charts remain the same, calculated from the daily logs.
-      // ...
-    END `DashboardTab`
+### Data Structures:
 
-    // --- Tab 3: Calendar View ---
-    CREATE `CalendarTab` ...
-    // ...
-  END `TabControl`
-**END MainPanel**
-END SidebarLayoutEND UI// Section 3: Application Logic (Modular Functions) //BEGIN LOGIC// --- Core Data Handling Functions ---FUNCTION HandleSubmit()// ... logic remains the same, but now saves EmployeeID with the record ...profile = ConfigurationStore.GetEmployeeProfile(employee_selector.value)new_record.EmployeeID = profile.EmployeeID// ...END FUNCTIONFUNCTION HandleDelete(record_id)// ... logic remains the same ...END FUNCTIONFUNCTION HandleEdit(record_id)// ... logic remains the same ...END FUNCTION// --- New Core Reporting Function ---// This is the key change to meet the CSV format requirement.FUNCTION HandleExportSummary()// 1. Get the data for the selected employee and date range.employee_name = employee_selector.valueprofile = ConfigurationStore.GetEmployeeProfile(employee_name)filtered_logs = Filter main_data_store by profile.EmployeeID and date_range_selector.value// 2. Aggregate the daily logs into the required summary format.
-`project_groups` = Group `filtered_logs` by `Project` name.
+#### Employee Profiles (Static Configuration):
+```
+employee_profiles <- data.frame(
+  EmployeeID: "EMP1001", "EMP1002", "EMP1003", "EMP1004", "EMP1005"
+  EmployeeName: "John Smith", "Sarah Johnson", "Mike Davis", "Lisa Wilson", "David Brown" 
+  Department: "Finance", "Marketing", "Sales", "Engineering", "HR"
+  YearlyVacationAllowance: 25, 25, 20, 30, 25 (days)
+  YearlySickDayAllowance: 10, 10, 10, 12, 10 (days)
+)
+```
 
-`summary_data` = CREATE empty list for the final report rows.
+#### Available Projects (Static List):
+```
+available_projects <- c(
+  "Cloud Infrastructure", "Security Audit", "API Integration",
+  "E-commerce Platform", "Website Redesign", "Database Migration", 
+  "Mobile App Development", "AI Chatbot", "CRM System", "Data Analytics Dashboard"
+)
+```
 
-FOR EACH `project_name` IN `project_groups`:
-  `logs_for_project` = Get all logs for this `project_name`.
+#### Activity Records (Dynamic Data Store):
+```
+STRUCTURE ActivityRecord:
+  RecordID: UNIQUE_ID (generated as "REC" + timestamp + random number)
+  EmployeeID: STRING (links to employee_profiles)
+  Date: DATE
+  Activity: STRING ("Project Work", "Sick Leave", "Vacation")
+  Project: STRING (only for "Project Work", empty otherwise)
+  Hours: NUMERIC (only for "Project Work", 0 otherwise)
+  Notes: STRING (optional)
+```
 
-  `summary_row` = CREATE new record for the report
-  `summary_row.employee_id` = `profile.EmployeeID`
-  `summary_row.employee_name` = `profile.EmployeeName`
-  `summary_row.project_name` = `project_name`
-  `summary_row.start_date` = MINIMUM `Date` from `logs_for_project`
-  `summary_row.end_date` = MAXIMUM `Date` from `logs_for_project`
-  `summary_row.hours_worked` = SUM `Hours` from `logs_for_project` WHERE `Activity` is "Project Work"
-  `summary_row.sick_days` = COUNT records in `filtered_logs` WHERE `Activity` is "Sick Leave"
-  `summary_row.vacation_days` = COUNT records in `filtered_logs` WHERE `Activity` is "Vacation"
-  `summary_row.department` = `profile.Department`
+### Helper Functions:
+```
+FUNCTION get_employees() -> Returns list of employee names
+FUNCTION get_projects() -> Returns list of available projects  
+FUNCTION get_employee_profile(employee_name) -> Returns employee profile with fallback
+FUNCTION generate_record_id() -> Returns unique record ID with timestamp
+```## Section 2: User Interface (Shiny UI)
+
+### Main Layout Structure:
+```
+ui <- fluidPage(
+  useShinyjs(),  # Enable JavaScript functionality
+  titlePanel("Employee Activity Tracker"),
   
-  ADD `summary_row` to `summary_data`
-END FOR
+  sidebarLayout(
+    sidebarPanel(
+      # Activity Input Section
+      h3("Log New Activity")
+      selectInput("employee_selector") # Populated from get_employees()
+      dateInput("date_selector") # Defaults to today
+      selectInput("activity_selector") # "Project Work", "Sick Leave", "Vacation"
+      
+      # Conditional Project Fields (shown only for "Project Work")
+      conditionalPanel(
+        condition = "input.activity_selector == 'Project Work'",
+        selectInput("project_selector") # Populated from get_projects()
+        numericInput("hours_input") # 0-24 hours, step 0.5
+      )
+      
+      textAreaInput("notes_input") # Optional notes
+      actionButton("submit_button") # Submit new entry
+      
+      # Filter Section
+      h4("Filter Options")
+      dateRangeInput("date_range_selector") # For filtering data
+    ),
+    
+    mainPanel(
+      tabsetPanel(
+        # Tab 1: Raw Data Display
+        tabPanel("Data Log",
+          DT::dataTableOutput("activity_table") # Interactive table with multi-select
+          actionButton("delete_selected") # Delete selected rows
+        ),
+        
+        # Tab 2: Analytics Dashboard  
+        tabPanel("Dashboard",
+          # Export Controls
+          fluidRow(
+            actionButton("export_summary_button") # Generate CSV summary
+            downloadButton("download_summary") # Download generated CSV (hidden initially)
+          ),
+          
+          # KPI Cards
+          fluidRow(
+            column(3, "Total Hours" + textOutput("total_hours_kpi")),
+            column(3, "Sick Days" + textOutput("sick_days_kpi")), 
+            column(3, "Vacation Days" + textOutput("vacation_days_kpi")),
+            column(3, "Active Projects" + textOutput("active_projects_kpi"))
+          ),
+          
+          # Interactive Charts
+          fluidRow(
+            column(6, plotlyOutput("hours_by_project_chart")), # Bar chart
+            column(6, plotlyOutput("activity_distribution_chart")) # Pie chart
+          )
+        ),
+        
+        # Tab 3: Calendar View (Placeholder)
+        tabPanel("Calendar View", "Calendar view functionality to be implemented")
+      )
+    )
+  )
+)
+```## Section 3: Server Logic (Reactive Programming)
 
-// 3. Convert to CSV and provide for download.
-`csv_output` = CONVERT `summary_data` to CSV format
-PROMPT user to download `csv_output` with a filename like "Summary_Report_John_Smith.csv"
-END FUNCTION// --- UI Rendering Functions ---FUNCTION RenderUI()// ... logic remains the same ...END FUNCTIONFUNCTION RenderDashboard(data, employee_name)// ... logic remains the same, calculating KPIs from daily logs ...END FUNCTION// --- Event Listeners ---ON submit_button click -> CALL HandleSubmit()ON delete_button click -> CALL HandleDelete(record_id)ON edit_button click -> CALL HandleEdit(record_id)ON export_summary_button click -> CALL HandleExportSummary()ON employee_selector OR date_range_selector change -> CALL RenderUI()END LOGIC
+### Reactive Values & State Management:
+```
+server <- function(input, output, session) {
+  # Reactive values store
+  values <- reactiveValues(
+    activity_data = activity_records,  # Main data store
+    summary_data = NULL                # Generated CSV data
+  )
+```
+
+### Event Handlers with Error Handling:
+
+#### Submit Handler:
+```
+observeEvent(input$submit_button, {
+  tryCatch({
+    # Get employee profile
+    employee_name <- input$employee_selector
+    profile <- get_employee_profile(employee_name)
+    
+    # Create new record
+    new_record <- data.frame(
+      RecordID = generate_record_id(),
+      EmployeeID = profile$EmployeeID[1],
+      Date = input$date_selector,
+      Activity = input$activity_selector,
+      Project = ifelse(condition, input$project_selector, ""),
+      Hours = ifelse(condition, input$hours_input, 0),
+      Notes = ifelse(is.null(input$notes_input), "", input$notes_input)
+    )
+    
+    # Add to reactive data store
+    values$activity_data <- rbind(values$activity_data, new_record)
+    
+    # Reset form fields
+    updateTextAreaInput(session, "notes_input", value = "")
+    if (input$activity_selector == "Project Work") {
+      updateNumericInput(session, "hours_input", value = 8)
+    }
+    
+    # Success notification
+    showNotification("Activity logged successfully!", type = "message")
+    
+  }, error = function(e) {
+    showNotification(paste("Error submitting entry:", e$message), type = "error")
+  })
+})
+```
+
+#### Delete Handler:
+```
+observeEvent(input$delete_selected, {
+  selected_rows <- input$activity_table_rows_selected
+  if (length(selected_rows) > 0) {
+    current_data <- filtered_activity_data()
+    if (nrow(current_data) > 0) {
+      record_ids <- current_data$RecordID[selected_rows]
+      values$activity_data <- values$activity_data[
+        !values$activity_data$RecordID %in% record_ids, ]
+      showNotification("Selected records deleted!", type = "warning")
+    }
+  } else {
+    showNotification("Please select rows to delete!", type = "warning")
+  }
+})
+```
+
+#### CSV Export Handler:
+```
+observeEvent(input$export_summary_button, {
+  tryCatch({
+    employee_name <- input$employee_selector
+    profile <- get_employee_profile(employee_name)
+    date_range <- input$date_range_selector
+    
+    # Filter logs for selected employee and date range
+    filtered_logs <- values$activity_data %>%
+      filter(.data$EmployeeID == profile$EmployeeID[1],  # Using .data$ for proper binding
+             .data$Date >= date_range[1],
+             .data$Date <= date_range[2])
+    
+    if (nrow(filtered_logs) == 0) {
+      showNotification("No data found for selected criteria!", type = "error")
+      return()
+    }
+    
+    # Group by project and create summary
+    project_groups <- filtered_logs %>%
+      filter(.data$Activity == "Project Work") %>%
+      group_by(.data$Project) %>%
+      summarise(
+        start_date = min(.data$Date),
+        end_date = max(.data$Date), 
+        hours_worked = sum(.data$Hours),
+        .groups = "drop"
+      )
+    
+    # Count sick and vacation days
+    sick_days <- sum(filtered_logs$Activity == "Sick Leave")
+    vacation_days <- sum(filtered_logs$Activity == "Vacation")
+    
+    # Create summary data compatible with original CSV format
+    if (nrow(project_groups) > 0) {
+      summary_data <- project_groups %>%
+        mutate(
+          employee_id = profile$EmployeeID[1],
+          employee_name = profile$EmployeeName[1],
+          project_name = .data$Project,
+          sick_days = sick_days,
+          vacation_days = vacation_days,
+          department = profile$Department[1]
+        ) %>%
+        select(.data$employee_id, .data$employee_name, .data$project_name, 
+               .data$start_date, .data$end_date, .data$hours_worked, 
+               .data$sick_days, .data$vacation_days, .data$department)
+    } else {
+      # Handle case with no project work
+      summary_data <- data.frame(
+        employee_id = profile$EmployeeID[1],
+        employee_name = profile$EmployeeName[1],
+        project_name = "No Project Work",
+        start_date = date_range[1],
+        end_date = date_range[2],
+        hours_worked = 0,
+        sick_days = sick_days,
+        vacation_days = vacation_days,
+        department = profile$Department[1]
+      )
+    }
+    
+    values$summary_data <- summary_data
+    shinyjs::show("download_summary")  # Show download button
+    showNotification("Summary report generated! Click Download CSV button.", type = "message")
+    
+  }, error = function(e) {
+    showNotification(paste("Error generating summary:", e$message), type = "error")
+  })
+})
+```
+
+### Reactive Data Processing:
+
+#### Data Filtering:
+```
+filtered_activity_data <- reactive({
+  date_range <- input$date_range_selector
+  
+  values$activity_data %>%
+    filter(.data$Date >= date_range[1], .data$Date <= date_range[2]) %>%
+    left_join(employee_profiles, by = "EmployeeID") %>%
+    select(.data$RecordID, .data$EmployeeName, .data$Date, .data$Activity, 
+           .data$Project, .data$Hours, .data$Notes) %>%
+    arrange(desc(.data$Date))
+})
+
+employee_filtered_data <- reactive({
+  employee_name <- input$employee_selector
+  profile <- get_employee_profile(employee_name)
+  date_range <- input$date_range_selector
+  
+  values$activity_data %>%
+    filter(.data$EmployeeID == profile$EmployeeID[1],
+           .data$Date >= date_range[1],
+           .data$Date <= date_range[2])
+})
+```
+
+### Output Rendering:
+
+#### Data Table:
+```
+output$activity_table <- DT::renderDataTable({
+  filtered_activity_data()
+}, options = list(pageLength = 10, scrollX = TRUE), selection = 'multiple')
+```
+
+#### KPI Calculations:
+```
+output$total_hours_kpi <- renderText({
+  data <- employee_filtered_data()
+  total <- sum(data$Hours[data$Activity == "Project Work"], na.rm = TRUE)
+  paste(total, "hours")
+})
+
+output$sick_days_kpi <- renderText({
+  data <- employee_filtered_data()
+  total <- sum(data$Activity == "Sick Leave")
+  paste(total, "days")
+})
+
+output$vacation_days_kpi <- renderText({
+  data <- employee_filtered_data()
+  total <- sum(data$Activity == "Vacation")
+  paste(total, "days")
+})
+
+output$active_projects_kpi <- renderText({
+  data <- employee_filtered_data()
+  projects <- unique(data$Project[data$Activity == "Project Work" & data$Project != ""])
+  paste(length(projects), "projects")
+})
+```
+
+#### Interactive Charts:
+```
+output$hours_by_project_chart <- renderPlotly({
+  data <- employee_filtered_data() %>%
+    filter(.data$Activity == "Project Work", .data$Project != "") %>%
+    group_by(.data$Project) %>%
+    summarise(TotalHours = sum(.data$Hours), .groups = "drop")
+  
+  if (nrow(data) == 0) {
+    return(plotly_empty())
+  }
+  
+  plot_ly(data, x = ~Project, y = ~TotalHours, type = "bar") %>%
+    layout(title = "Hours by Project",
+           xaxis = list(title = "Project"),
+           yaxis = list(title = "Hours"))
+})
+
+output$activity_distribution_chart <- renderPlotly({
+  data <- employee_filtered_data() %>%
+    count(.data$Activity) %>%
+    mutate(Percentage = .data$n / sum(.data$n) * 100)
+  
+  if (nrow(data) == 0) {
+    return(plotly_empty())
+  }
+  
+  plot_ly(data, labels = ~Activity, values = ~n, type = "pie") %>%
+    layout(title = "Activity Distribution")
+})
+```
+
+#### CSV Download:
+```
+output$download_summary <- downloadHandler(
+  filename = function() {
+    employee_name <- gsub(" ", "_", input$employee_selector)
+    paste0("Summary_Report_", employee_name, "_", Sys.Date(), ".csv")
+  },
+  content = function(file) {
+    if (!is.null(values$summary_data)) {
+      write_csv(values$summary_data, file)
+    }
+  }
+)
+```
+
+## Section 4: Key Implementation Notes
+
+### Critical Fixes Applied:
+1. **Variable Binding**: Used `.data$` notation throughout dplyr operations to prevent "no visible binding" errors
+2. **Error Handling**: Wrapped critical functions in `tryCatch()` blocks with proper user notifications
+3. **Notification Types**: Used valid types ("message", "error", "warning") instead of invalid "success" 
+4. **Reactive Programming**: Implemented proper reactive data flow with `reactiveValues()` and `reactive()` functions
+5. **CSV Compatibility**: Generated summary reports match original employee_work_history.csv format
+6. **UI State Management**: Used `shinyjs::show()` to dynamically display download button after CSV generation
+
+### Data Flow:
+1. User inputs daily activities → Stored in `values$activity_data`
+2. Data filtered by date range and employee → Displayed in interactive table
+3. KPIs calculated from filtered data → Displayed as cards
+4. Charts rendered from aggregated data → Interactive plotly visualizations  
+5. Export triggered → Data grouped by projects → CSV summary generated → Download enabled
+
+### File Structure:
+- `app.R`: Main application file with UI and server logic
+- `run_app.R`: Simple launcher script  
+- `README.md`: Comprehensive documentation
+- `pseudocode.txt`: This implementation specification
