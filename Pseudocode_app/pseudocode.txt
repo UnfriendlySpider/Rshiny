@@ -1,0 +1,60 @@
+// Section 1: Configuration & Database Setup //BEGIN// --- Configuration Store (Replaces hardcoded lists) ---DEFINE ConfigurationStoreFUNCTION GetEmployees() RETURNS LIST OF STRINGSFUNCTION GetProjects() RETURNS LIST OF STRINGSFUNCTION GetEmployeeProfile(employee_name) RETURNS EmployeeProfileEND ConfigurationStore// --- Data Structures (Updated for new CSV format) ---DEFINE STRUCTURE EmployeeProfileEmployeeID: STRING // e.g., "EMP1001"EmployeeName: STRINGDepartment: STRINGYearlyVacationAllowance: NUMBER // in daysYearlySickDayAllowance: NUMBER // in daysEND STRUCTURE// The ActivityRecord remains a daily log, as this is the most effective way to capture data.DEFINE STRUCTURE ActivityRecordRecordID: UNIQUE_IDEmployeeID: STRING // Link to EmployeeProfileDate: DATEActivity: STRING // "Project Work", "Sick Leave", or "Vacation"Project: STRING (empty if not "Project Work")Hours: NUMBER (relevant for "Project Work")Notes: STRING (can be empty)END STRUCTURE// --- Database Abstraction Layer ---DEFINE DatabaseFUNCTION Connect()FUNCTION FetchAllRecords() RETURNS LIST OF ActivityRecordFUNCTION WriteRecord(record) RETURNS BOOLEAN (success/fail)FUNCTION UpdateRecord(record) RETURNS BOOLEAN (success/fail)FUNCTION DeleteRecord(record_id) RETURNS BOOLEAN (success/fail)END Database// --- Initial Application State ---db_connection = Database.Connect()main_data_store = Database.FetchAllRecords()END// Section 2: User Interface (UI) Definition //BEGIN UI// The UI remains largely the same, as the core function is still daily data entry.// The main change is the enhanced functionality of the "Generate Report" button.CREATE MainWindow with title "Employee Activity Tracker"CREATE SidebarLayout// --- Sidebar Panel for Inputs ---
+**BEGIN SidebarPanel**
+  DISPLAY header "Log New Activity"
+  CREATE dropdown `employee_selector` populated by `ConfigurationStore.GetEmployees()`
+  // Other UI elements (date_selector, activity_selector, etc.) remain the same.
+  // ...
+**END SidebarPanel**
+
+// --- Main Panel for Displaying Information ---
+**BEGIN MainPanel**
+  CREATE `TabControl`
+
+    // --- Tab 1: Data Log (Shows raw daily entries) ---
+    CREATE `DataLogTab` with title "Data Log"
+      DISPLAY header "All Submitted Daily Entries"
+      CREATE interactive table `activity_table`
+        // Columns: Employee Name, Date, Activity, Project, Hours, Notes, Actions
+    END `DataLogTab`
+
+    // --- Tab 2: Dashboard ---
+    CREATE `DashboardTab` with title "Dashboard"
+      DISPLAY header for "Analytics Dashboard"
+      CREATE `date_range_selector` (start date, end date)
+      // The export button is now the key to generating the requested CSV format.
+      CREATE button `export_summary_button` with text "Generate Summary Report (CSV)"
+      // KPIs and charts remain the same, calculated from the daily logs.
+      // ...
+    END `DashboardTab`
+
+    // --- Tab 3: Calendar View ---
+    CREATE `CalendarTab` ...
+    // ...
+  END `TabControl`
+**END MainPanel**
+END SidebarLayoutEND UI// Section 3: Application Logic (Modular Functions) //BEGIN LOGIC// --- Core Data Handling Functions ---FUNCTION HandleSubmit()// ... logic remains the same, but now saves EmployeeID with the record ...profile = ConfigurationStore.GetEmployeeProfile(employee_selector.value)new_record.EmployeeID = profile.EmployeeID// ...END FUNCTIONFUNCTION HandleDelete(record_id)// ... logic remains the same ...END FUNCTIONFUNCTION HandleEdit(record_id)// ... logic remains the same ...END FUNCTION// --- New Core Reporting Function ---// This is the key change to meet the CSV format requirement.FUNCTION HandleExportSummary()// 1. Get the data for the selected employee and date range.employee_name = employee_selector.valueprofile = ConfigurationStore.GetEmployeeProfile(employee_name)filtered_logs = Filter main_data_store by profile.EmployeeID and date_range_selector.value// 2. Aggregate the daily logs into the required summary format.
+`project_groups` = Group `filtered_logs` by `Project` name.
+
+`summary_data` = CREATE empty list for the final report rows.
+
+FOR EACH `project_name` IN `project_groups`:
+  `logs_for_project` = Get all logs for this `project_name`.
+
+  `summary_row` = CREATE new record for the report
+  `summary_row.employee_id` = `profile.EmployeeID`
+  `summary_row.employee_name` = `profile.EmployeeName`
+  `summary_row.project_name` = `project_name`
+  `summary_row.start_date` = MINIMUM `Date` from `logs_for_project`
+  `summary_row.end_date` = MAXIMUM `Date` from `logs_for_project`
+  `summary_row.hours_worked` = SUM `Hours` from `logs_for_project` WHERE `Activity` is "Project Work"
+  `summary_row.sick_days` = COUNT records in `filtered_logs` WHERE `Activity` is "Sick Leave"
+  `summary_row.vacation_days` = COUNT records in `filtered_logs` WHERE `Activity` is "Vacation"
+  `summary_row.department` = `profile.Department`
+  
+  ADD `summary_row` to `summary_data`
+END FOR
+
+// 3. Convert to CSV and provide for download.
+`csv_output` = CONVERT `summary_data` to CSV format
+PROMPT user to download `csv_output` with a filename like "Summary_Report_John_Smith.csv"
+END FUNCTION// --- UI Rendering Functions ---FUNCTION RenderUI()// ... logic remains the same ...END FUNCTIONFUNCTION RenderDashboard(data, employee_name)// ... logic remains the same, calculating KPIs from daily logs ...END FUNCTION// --- Event Listeners ---ON submit_button click -> CALL HandleSubmit()ON delete_button click -> CALL HandleDelete(record_id)ON edit_button click -> CALL HandleEdit(record_id)ON export_summary_button click -> CALL HandleExportSummary()ON employee_selector OR date_range_selector change -> CALL RenderUI()END LOGIC
