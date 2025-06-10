@@ -1,0 +1,67 @@
+PSEUDOCODE FOR EMPLOYEE WORK HISTORY DASHBOARD (app.R)
+=========================================================
+
+1. SETUP AND DEPENDENCIES
+   - Import required libraries: shiny, plotly, readr, dplyr, tidyr, lubridate
+   - Load employee work history data from CSV file
+   - Convert date columns to proper Date format
+
+2. USER INTERFACE DEFINITION
+   - Create main page with title "Employee Work History Dashboard"
+   - Setup sidebar layout with:
+     a) SIDEBAR PANEL:
+        - Dropdown for metric selection (Hours Worked, Sick Days, Vacation Days)
+        - Dropdown for aggregation method (Sum, Average, Maximum)
+        - Help text explaining both heatmaps
+     
+     b) MAIN PANEL:
+        - Section 1: "Employee vs Projects Heatmap" with plotly output
+        - Section 2: "Employee vs Months Heatmap" with plotly output
+
+3. SERVER LOGIC
+
+   3.1 FIRST HEATMAP: Employee vs Projects
+       - Group data by employee name and project name
+       - Apply selected aggregation method (sum/mean/max) to selected metric
+       - Transform data into wide format (employees as rows, projects as columns)
+       - Convert to matrix for heatmap visualization
+       - Create interactive plotly heatmap with:
+         * Viridis color scale
+         * Custom hover tooltips showing employee, project, and metric value
+         * Rotated x-axis labels for project names
+         * Dynamic title based on selected metric and aggregation
+
+   3.2 SECOND HEATMAP: Employee vs Months  
+       - Extract start month from each project's start date
+       - Assign all project hours to the start month (simplified approach)
+       - Group data by employee name and month
+       - Sum total hours worked per employee per month
+       - Transform data into wide format (employees as rows, months as columns)
+       - Convert to matrix and sort months chronologically
+       - Create interactive plotly heatmap with:
+         * Blues color scale (different from first heatmap)
+         * Custom hover tooltips showing employee, month, and hours
+         * Rotated x-axis labels for months
+         * Fixed title "Total Hours Worked by Employee and Month"
+
+4. APPLICATION LAUNCH
+   - Combine UI and server components
+   - Start Shiny application
+
+KEY DESIGN DECISIONS:
+- Uses reactive programming model for real-time updates
+- Employs different color schemes to distinguish heatmaps
+- Simplifies month assignment by using project start dates
+- Provides interactive controls for first heatmap only
+- Uses consistent styling and layout patterns
+- Handles missing data with na.rm = TRUE
+- Fills missing combinations with 0 values
+
+DATA FLOW:
+CSV File → Data Processing → Reactive Server Functions → Interactive Visualizations
+
+INTERACTIVITY:
+- User selects metric and aggregation method
+- First heatmap updates automatically based on selections
+- Second heatmap remains static (hours worked only)
+- Both heatmaps provide detailed hover information
